@@ -76,3 +76,10 @@ def discriminator_train_step(real_data, fake_data,
     prediction_real = discriminator(real_data)
     error_real = loss(prediction_real, torch.ones(len(real_data),1).to(device))
     error_real.backward()
+    
+    prediction_fake = discriminator(fake_data)
+    error_fake = loss(prediction_fake, torch.zeros(len(fake_data), 1).to(device))
+    error_fake.backward()
+    
+    d_optimizer.step()
+    return error_real + error_fake
