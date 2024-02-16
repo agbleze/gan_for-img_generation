@@ -83,3 +83,9 @@ def discriminator_train_step(real_data, fake_data,
     
     d_optimizer.step()
     return error_real + error_fake
+
+
+def generator_train_step(fake_data):
+    g_optimizer.zero_grad()
+    
+    prediction = discriminator(fake_data)
