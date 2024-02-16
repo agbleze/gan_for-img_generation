@@ -68,3 +68,11 @@ summary(generator, torch.zeros(1, 100))
 def noise(size):
     n = torch.randn(size, 100)
     return n.to(device)
+
+# %% define func to train discriminator
+def discriminator_train_step(real_data, fake_data, 
+                             d_optimizer):
+    d_optimizer.zero_grad()
+    prediction_real = discriminator(real_data)
+    error_real = loss(prediction_real, torch.ones(len(real_data),1).to(device))
+    error_real.backward()
