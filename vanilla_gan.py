@@ -126,3 +126,7 @@ sample_images = generator(z).data.cpu().view(64, 1, 28, 28)
 grid = make_grid(sample_images, nrow=8, normalize=True)
 show(grid.cpu().detach().permute(1,2,0), sz=5)
     
+# %%
+### print(12)
+print("12")
+# %%
