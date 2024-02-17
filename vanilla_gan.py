@@ -71,7 +71,7 @@ def noise(size):
 
 # %% define func to train discriminator
 def discriminator_train_step(real_data, fake_data, 
-                             d_optimizer):
+                             d_optimizer, loss):
     d_optimizer.zero_grad()
     prediction_real = discriminator(real_data)
     error_real = loss(prediction_real, torch.ones(len(real_data),1).to(device))
@@ -85,7 +85,44 @@ def discriminator_train_step(real_data, fake_data,
     return error_real + error_fake
 
 
-def generator_train_step(fake_data):
+def generator_train_step(real_data, fake_data, g_optimizer, loss):
     g_optimizer.zero_grad()
     
     prediction = discriminator(fake_data)
+    error = loss(prediction, torch.ones(len(real_data), 1).to(device))
+    error.backward()
+    g_optimizer.step()
+    return error
+    
+#%% define discriminator and loss
+discriminator = Discriminator().to(device)
+generator = Generator().to(device)
+d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0002)
+g_optimizer = optim.Adam(generator.parameters(), lr=0.0002)
+loss = nn.BCELoss()
+num_epochs = 200
+log = Report(num_epochs)
+
+
+#%% run model overepochs
+for epoch in range(num_epochs):
+    N = len(data_loader)
+    for i, (images, _) in enumerate(data_loader):
+        real_data = images.view(len(images), -1).to(device)
+        fake_data = generator(noise(len(real_data))).to(device)
+        fake_data = fake_data.detach()
+        d_loss = discriminator_train_step(real_data, fake_data, d_optimizer, loss)
+        
+        fake_data = generator(noise(len(real_data))).to(device)
+        g_loss = generator_train_step(real_data, fake_data, g_optimizer, loss)
+        log.record(epoch + (1+i)/N, d_loss=d_loss.item(), g_loss=g_loss.item(), end="\r")
+    log.report_avgs(epoch+1)
+log.plot_epochs(["d_loss", "g_loss"])
+    
+    
+#%% visualize fake data
+z = torch.randn(64, 100).to(device)
+sample_images = generator(z).data.cpu().view(64, 1, 28, 28)
+grid = make_grid(sample_images, nrow=8, normalize=True)
+show(grid.cpu().detach().permute(1,2,0), sz=5)
+    
