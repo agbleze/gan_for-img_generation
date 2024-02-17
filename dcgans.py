@@ -58,7 +58,7 @@ class Faces(Dataset):
 ds = Faces(folder="cropped_faces/")
 
 #%% define dataloader
-dataloader = DataLoader(ds, batch_size=64, shuffle=True, num_workers=8)
+dataloader = DataLoader(ds, batch_size=64, shuffle=True)#, num_workers=8)
 
 #%% define weight initialization so weights have a smaller spread
 def weight_init(m):
@@ -203,3 +203,4 @@ noise = torch.randn(64, 100, 1, 1, device=device)
 sample_images = generator(noise).detach().cpu()
 grid = vutils.make_grid(sample_images, nrow=8, normalize=True)
 show(grid.cpu().detach().permute(1,2,0), sz=10, title="Generated images")
+# %%
