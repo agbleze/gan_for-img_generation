@@ -174,7 +174,7 @@ loss = nn.BCELoss()
 
 #%% run models during epochs
 # loop through N epochs over the data
-log = Report(25)
+log = Report(55)
 for epoch in range(25):
     N = len(dataloader)
     # load real dtata
@@ -189,7 +189,7 @@ for epoch in range(25):
        
        # generate new set of fake-data and train generator
         fake_data = generator(torch.randn(len(real_data), 100, 1, 1).to(device)).to(device)
-        fake_data = fake_data.detach()
+        fake_data = fake_data#.detach()
         g_loss = generator_train_step(real_data, fake_data, g_optimizer, loss)
         
         # record losses
@@ -203,4 +203,6 @@ noise = torch.randn(64, 100, 1, 1, device=device)
 sample_images = generator(noise).detach().cpu()
 grid = vutils.make_grid(sample_images, nrow=8, normalize=True)
 show(grid.cpu().detach().permute(1,2,0), sz=10, title="Generated images")
-# %%
+# %% define dataset
+
+
