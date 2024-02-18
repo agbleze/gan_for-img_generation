@@ -60,7 +60,7 @@ class Faces(Dataset):
         image_path = self.images[index]
         image = Image.open(image_path)
         image = transform(image)
-        gender = np.where("female" in image_path, 1, 0)
+        gender = np.where("female" in [image_path], 1, 0)
         return image, torch.tensor(gender).long()
     
     
@@ -127,3 +127,115 @@ summary(discriminator, torch.zeros(32, 3, 64, 64).to(device), torch.zeros(32).lo
 
 
 #%% define generator model arch
+
+class Generator(nn.Module):
+    def __init__(self, emb_size=32):
+        super(Generator, self).__init__()
+        self.emb_size = emb_size
+        self.label_embedding = nn.Embedding(num_embeddings=2, embedding_dim=self.emb_size)
+        
+        self.model = nn.Sequential(nn.ConvTranspose2d(in_channels=100+self.emb_size,
+                                                      out_channels=64*8, kernel_size=4, stride=1, padding=0, bias=False),
+                                   nn.BatchNorm2d(num_features=64*8),
+                                   nn.ReLU(inplace=True),
+                                   nn.ConvTranspose2d(in_channels=64*8, out_channels=64*4, kernel_size=4, stride=2, padding=1, bias=False),
+                                   nn.BatchNorm2d(num_features=64*4),
+                                   nn.ReLU(inplace=True),
+                                   nn.ConvTranspose2d(in_channels=64*4, out_channels=64*2, kernel_size=4, stride=2, padding=1, bias=False),
+                                   nn.BatchNorm2d(num_features=64*2),
+                                   nn.ReLU(inplace=True),
+                                   nn.ConvTranspose2d(in_channels=64*2, out_channels=64, kernel_size=4, stride=2, padding=1, bias=False),
+                                   nn.BatchNorm2d(num_features=64),
+                                   nn.ReLU(inplace=True),
+                                   nn.ConvTranspose2d(in_channels=64, out_channels=3, kernel_size=4, stride=2, padding=1, bias=False),
+                                   nn.Tanh()
+                                   )
+        self.apply(weights_init)
+        
+    def forward(self, input_noise, labels):
+        label = self.label_embedding(labels).view(len(labels), self.emb_size, 1, 1)
+        input = torch.cat([input_noise, label], 1)
+        return self.model(input)
+    
+#%%  ## summary
+generator = Generator().to(device)
+summary(model=generator, input_data=(torch.zeros(32, 100, 1, 1).to(device), torch.zeros(32).long().to(device)))
+
+def noise(size):
+    n = torch.randn(size, 100, 1, 1, device=device)
+    return n.to(device)
+
+
+#%% func to train discriminator
+
+def discriminator_train_step(real_data, real_labels, fake_data, fake_labels):
+    d_optimizer.zero_grad()
+    prediction_real = discriminator(real_data, real_labels)
+    error_real = loss(prediction_real, torch.ones(len(real_data), 1).to(device))
+    error_real.backward()
+    
+    prediction_fake = discriminator(fake_data, fake_labels)
+    error_fake = loss(prediction_fake, torch.zeros(len(fake_data), 1).to(device))
+    error_fake.backward()
+    d_optimizer.step()
+    return error_real + error_fake
+
+
+#%% func to train generator
+
+def generator_train_step(fake_data, fake_labels):
+    g_optimizer.zero_grad()
+    prediction = discriminator(fake_data, fake_labels)
+    error = loss(prediction, torch.ones(len(fake_data), 1).to(device))
+    error.backward()
+    g_optimizer.step()
+    return error
+
+
+#%% define the generator and discriminator models
+
+discriminator = Discriminator().to(device)
+generator = Generator().to(device)
+loss = nn.BCELoss()
+d_optimizer = optim.Adam(params = discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+g_optimizer = optim.Adam(params=generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+fixed_noise = torch.randn(64, 100, 1, 1, device=device)
+fixed_fake_labels = torch.LongTensor([0]*(len(fixed_noise)//2) + [1]*(len(fixed_noise)//2)).to(device)
+loss = nn.BCELoss()
+n_epochs = 25
+img_list = []
+
+#%% train model
+log = Report(n_epochs)
+for epoch in range(n_epochs):
+    for bx, (images, labels) in enumerate(dataloader):
+        N = len(dataloader)
+        real_data, real_labels = images.to(device), labels.to(device)
+        fake_labels = torch.LongTensor(np.random.randint(0, 2, len(real_data))).to(device)
+        fake_data = generator(noise(len(real_data)), fake_labels)
+        fake_data = fake_data.detach()
+        
+        # train discriminator
+        d_loss = discriminator_train_step(real_data, real_labels, fake_data, fake_labels)
+        
+        # regenerate fake images and fake labels and train generator
+        fake_labels = torch.LongTensor(np.random.randint(low=0, high=1, size=len(real_data))).to(device)
+        fake_data = generator(noise(len(real_data)), fake_labels).to(device)
+        g_loss = generator_train_step(fake_data, fake_labels)
+        
+        # log metrics
+        pos = epoch + (1+bx) / N
+        log.record(pos, d_loss=d_loss.detach(), g_loss=g_loss.detach(), end="\r")
+    log.report_avgs(epoch+1)
+log.plot_epochs(["d_loss", "g_loss"])    
+    
+#%% generta male and female images
+with torch.no_grad():
+    fake = generator(fixed_noise, fixed_fake_labels).detach().cpu()
+    imgs = vutils.make_grid(fake, padding=2, normalize=True).permute(1,2,0)
+    img_list.append(imgs)
+    show(imgs, sz=10)
+
+
+
+# %%
